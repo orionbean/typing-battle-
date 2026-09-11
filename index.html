@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タイピングバトル ～言霊のプリンセス＆プリンス～</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f9f5ff;
+    --panel: rgba(255, 255, 255, 0.85);
+    --panel-border: #e8d7ff;
+    --accent: #ff9ebb;
+    --hp: #ff7597;
+    --mp: #9ccaff;
+    --ok: #62d89e;
+    --warn: #ffd166;
+    --text: #5a4b6e;
+    --text-light: #8e7d9f;
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    background: radial-gradient(circle at 50% 20%, #ffeef2, #f3e8ff 70%);
+    color: var(--text);
+    overflow: hidden;
+    user-select: none;
+  }
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 20px; }
+  .hidden { display: none !important; }
+
+  /* ---- タイトル / キャラ選択 ---- */
+  h1 { font-size: clamp(28px, 6vw, 48px); letter-spacing: 2px;
+       color: #ff6b9d; text-shadow: 2px 2px 0px #fff, 0 0 12px rgba(255,107,157,0.3); margin-bottom: 6px; }
+  .subtitle { color: #8f77b5; font-weight: bold; margin-bottom: 24px; letter-spacing: 2px; }
+  .chars { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+  .char-card {
+    width: 210px; background: var(--panel); border: 2px solid var(--panel-border);
+    border-radius: 20px; padding: 18px; cursor: pointer; transition: .15s;
+    text-align: center; box-shadow: 0 6px 12px rgba(150,120,200,0.1);
+  }
+  .char-card:hover { border-color: var(--accent); transform: translateY(-6px);
+                     box-shadow: 0 12px 24px rgba(255,158,187,0.3); }
+  .char-emoji { font-size: 64px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
+  .char-name { font-size: 18px; font-weight: bold; margin: 8px 0; color: #ff5c8a; }
+  .char-desc { font-size: 13px; color: var(--text-light); min-height: 54px; margin-bottom: 10px; line-height: 1.4; }
+  .stat-row { display: flex; justify-content: space-between; font-size: 13px;
+              margin: 4px 0; align-items: center; }
+  .bar-mini { height: 8px; background: #eedfff; border-radius: 4px; flex: 1;
+              margin-left: 8px; overflow: hidden; }
+  .bar-mini > div { height: 100%; border-radius: 4px; }
+  .hint { margin-top: 26px; color: #7d6b91; font-size: 14px; line-height: 1.7;
+          text-align: center; background: rgba(255,255,255,0.6); padding: 12px 20px; border-radius: 15px; border: 1px solid #eee; }
+  kbd { background: #fff; border: 1px solid #c5b5dc; border-bottom-width: 3px;
+        border-radius: 5px; padding: 1px 7px; font-family: monospace; font-weight: bold; color: #7d6b91; }
+
+  /* ---- バトル画面 ---- */
+  #battle { justify-content: flex-start; padding: 0; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="1" fill="rgba(255,182,193,0.3)"/></svg>'); }
+  .topbar { width: 100%; display: flex; justify-content: space-between;
+            align-items: flex-start; padding: 16px 20px; gap: 12px; }
+  .status { width: 38%; background: rgba(255,255,255,0.7); padding: 10px 14px; border-radius: 16px; border: 1px solid #f0e2ff; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+  .status.enemy { text-align: right; }
+  .status .nm { font-weight: bold; font-size: 16px; margin-bottom: 4px; color: var(--text); }
+  .bar { height: 16px; background: #f0e6ff; border-radius: 9px; overflow: hidden;
+         border: 1px solid #e2d3f5; position: relative; margin-bottom: 6px; }
+  .bar > div { height: 100%; width: 100%; transition: width .25s ease; }
+  .bar .label { position: absolute; inset: 0; font-size: 11px; line-height: 16px;
+                text-align: center; color: var(--text); font-weight: bold; }
+  .hpfill { background: linear-gradient(90deg, #ff7597, #ffb3c6); }
+  .mpfill { background: linear-gradient(90deg, #8bc2ff, #bce0ff); }
+  .stage-ind { text-align: center; font-size: 15px; color: #ff6b9d; font-weight: bold;
+               letter-spacing: 1px; padding: 6px 12px; background: #fff; border-radius: 20px; border: 1px solid #ffd1d9; min-width: 120px;}
+
+  .arena { position: relative; width: 100%; flex: 1; overflow: hidden; }
+  .fighter { position: absolute; bottom: 15%; font-size: clamp(80px,18vw,160px);
+             filter: drop-shadow(0 8px 12px rgba(160,130,180,0.3)); transition: transform .1s; }
+  #player { left: 8%; }
+  #enemy  { right: 8%; transform: scaleX(-1); }
+
+  /* アニメーション設定 */
+  .shake { animation: shake .3s; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-10px)} 75%{transform:translateX(10px)} }
+  #enemy.shake { animation: shakeE .3s; }
+  @keyframes shakeE { 0%,100%{transform:scaleX(-1) translateX(0)} 25%{transform:scaleX(-1) translateX(-10px)} 75%{transform:scaleX(-1) translateX(10px)} }
+  .flash { animation: flash .25s; }
+  @keyframes flash { 0%{filter:brightness(1.5) drop-shadow(0 0 25px #fff)} 100%{filter:none} }
+
+  /* タイピングパネル */
+  .type-panel {
+    position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%);
+    width: min(540px, 75%); background: rgba(255, 255, 255, 0.92);
+    border: 3px solid #ffcbd9; border-radius: 24px; padding: 24px 26px;
+    text-align: center; box-shadow: 0 10px 30px rgba(255,180,200,0.25);
+  }
+  .romaji { font-size: clamp(26px, 4.6vw, 42px); font-family: "Courier New", monospace;
+            letter-spacing: 2px; font-weight: bold; word-break: break-all; min-height: 48px; color: #8e7a9f; }
+  .romaji .done { color: var(--ok); text-shadow: 1px 1px 0 white; }
+  .romaji .cur  { color: #fff; background: var(--accent); border-radius: 6px; padding: 0 4px; }
+  .romaji .todo { color: #b5a4c7; }
+  .meaning { color: #6d5982; font-size: 16px; font-weight: bold; margin-top: 10px; min-height: 22px;}
+  .combo { color: #ff5c8a; font-size: 15px; font-weight: bold; margin-top: 8px; height: 18px; }
+
+  .ult-banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%);
+                font-size: 32px; font-weight: bold; color: #ff5588;
+                text-shadow: 0 0 12px #fff, 2px 2px 0px #ffcbd9; opacity: 0; pointer-events: none; z-index: 10; }
+  .ult-banner.show { animation: ult 1.8s ease; }
+  @keyframes ult { 0%{opacity:0; transform:translateX(-50%) scale(.6)} 20%{opacity:1; transform:translateX(-50%) scale(1.1)} 80%{opacity:1} 100%{opacity:0} }
+  .ult-ready { animation: glow 1s infinite alternate; }
+  @keyframes glow { from{box-shadow:0 0 4px var(--accent); border-color: var(--accent);} to{box-shadow:0 0 16px #ff6b9d; border-color: #ff6b9d;} }
+
+  .dmg-pop { position: absolute; font-weight: bold; font-size: 32px; pointer-events:none;
+             animation: pop 0.8s ease-out forwards; text-shadow: 2px 2px 0px #fff; font-family: 'Arial Black', sans-serif; }
+  @keyframes pop { 0%{opacity:1; transform:translateY(0) scale(.8)} 100%{opacity:0; transform:translateY(-70px) scale(1.2)} }
+
+  /* オーバーレイ（クリア/ゲームオーバー） */
+  .overlay { position: fixed; inset: 0; background: rgba(255,243,246,0.92);
+             display: flex; flex-direction: column; align-items: center;
+             justify-content: center; text-align: center; z-index: 50; padding: 20px;}
+  .overlay h2 { font-size: clamp(32px,8vw,56px); margin-bottom: 16px; color: #ff5c8a;
+                text-shadow: 0 0 15px rgba(255,100,150,0.2), 2px 2px 0px #fff; }
+  .overlay p { font-size: 18px; color: #6d5982; margin-bottom: 8px; line-height:1.6; font-weight: bold;}
+  button.go { margin-top: 24px; font-size: 20px; padding: 14px 36px; border: none;
+              border-radius: 30px; cursor: pointer; font-weight: bold;
+              background: linear-gradient(90deg, #ff9ebb, #ff6b9d); color: #fff; box-shadow: 0 6px 12px rgba(255,107,157,0.3); transition: 0.2s; }
+  button.go:hover { filter: brightness(1.05); transform: scale(1.04); box-shadow: 0 8px 16px rgba(255,107,157,0.4); }
+  .ult-name-tag { color: #ff4070; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<!-- タイトル / キャラ選択 -->
+<div id="title" class="screen">
+  <h1>タイピングバトル</h1>
+  <div class="subtitle">― 言霊（ことだま）のプリンセス＆プリンス ―</div>
+  <div class="chars" id="charList"></div>
+  <div class="hint">
+    <b>あそびかた</b>：まんなかに出る<b>ローマ字</b>をキーボードでうって、かわいいお友達をあつめよう！<br>
+    だれかをみつけると、つぎのステージへすすむよ。ぜんぶで 5ステージ！<br>
+    タイピングすると<b style="color:#6fa9ff">MP</b>がたまって、まんたんのときに<kbd>Enter</kbd>をおすと、とくべつな魔法がだせるよ！
+  </div>
+</div>
+
+<!-- バトル -->
+<div id="battle" class="screen hidden">
+  <div class="topbar">
+    <div class="status player">
+      <div class="nm" id="pName">勇者</div>
+      <div class="bar"><div class="hpfill" id="pHp"></div><span class="label" id="pHpL"></span></div>
+      <div class="bar" id="mpBar"><div class="mpfill" id="pMp"></div><span class="label" id="pMpL"></span></div>
+    </div>
+    <div class="stage-ind" id="stageInd">STAGE 1 / 5</div>
+    <div class="status enemy">
+      <div class="nm" id="eName">スライム</div>
+      <div class="bar"><div class="hpfill" id="eHp"></div><span class="label" id="eHpL"></span></div>
+    </div>
+  </div>
+
+  <div class="arena">
+    <div class="fighter" id="player">🤴</div>
+    <div class="fighter" id="enemy">🟢</div>
+    <div class="ult-banner" id="ultBanner"></div>
+    <div class="type-panel" id="typePanel">
+      <div class="romaji" id="romaji"></div>
+      <div class="meaning" id="meaning"></div>
+      <div class="combo" id="combo"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+//============== キャラクター定義 ==============
+const CHARACTERS = [
+  { id:"warrior", emoji:"🤴", name:"アルク",
+    desc:"クッキーのつるぎを持つ水色ヘアの男の子。攻めも守りもばっちり！",
+    hp:140, atk:1.0, def:1.0,
+    ult:"シュガー・ブレイドダンス" },
+  { id:"mage", emoji:"🧙‍♀️", name:"リオン",
+    desc:"ピンクの髪のマホウ少女。キラキラの魔法で、あっという間にクリアできるよ！",
+    hp:100, atk:1.45, def:0.8,
+    ult:"スターライト・カリキュレイト" },
+  { id:"guard", emoji:"🧸", name:"ガロ",
+    desc:"大きなハートの盾を持った、もふもふのくまさん。とっても打たれ強いよ！",
+    hp:190, atk:0.85, def:1.45,
+    ult:"キャンディ・ハートシールド" },
+];
+
+//============== 敵（5ステージ）定義 ==============
+const STAGES = [
+  { emoji:"🟢", name:"ニコニコ・ライム",     hp:120, atk:4,  interval:4200, tier:0 },
+  { emoji:"🦇", name:"チョコ・バット",   hp:170, atk:6,  interval:3800, tier:1 },
+  { emoji:"🗿", name:"クッキー・ゴーレム", hp:220, atk:8,  interval:3300, tier:2 },
+  { emoji:"🐉", name:"プチ・ファイアドラゴン", hp:280, atk:11, interval:2900, tier:3 },
+  { emoji:"👑", name:"ミニ魔王ヴァルゼくん",   hp:350, atk:14, interval:2500, tier:4 },
+];
+
+//============== 単語リスト ==============
+const WORDS = [
+  [ // tier0 やさしい
+    ["ken","剣"],["tate","盾"],["hi","火"],["kaze","風"],["mizu","水"],
+    ["yari","槍"],["yume","夢"],["sora","空"],["tori","鳥"],["hana","花"],
+    ["yama","山"],["umi","海"],["ishi","石"],["hoshi","星"],["tsuki","月"],
+    ["neko","猫"],["inu","犬"],["ki","木"],["te","手"],["michi","道"],
+  ],
+  [ // tier1
+    ["honoo","炎"],["koori","氷"],["arashi","嵐"],["ryuu","竜"],["kiba","牙"],
+    ["tsubasa","翼"],["hikari","光"],["yami","闇"],["kishi","騎士"],["yoroi","鎧"],
+    ["mahou","魔法"],["senshi","戦士"],["tatakai","戦い"],["seiken","聖剣"],["jaki","邪気"],
+  ],
+  [ // tier2
+    ["kaminari","雷"],["bakuen","爆炎"],["reppuu","烈風"],["hyouga","氷河"],["gouka","業火"],
+    ["raimei","雷鳴"],["zekkou","絶光"],["meikyuu","迷宮"],["fuuin","封印"],["shoukan","召喚"],
+    ["kekkai","結界"],["ougi","奥義"],["zankoku","残酷"],["shippuu","疾風"],["gekirin","逆鱗"],
+  ],
+  [ // tier3
+    ["tenkuuno tsurugi","天空の剣"],["honoono ryuu","炎の竜"],["kurayami no ou","闇の王"],
+    ["hagane no yoroi","鋼の鎧"],["raimei kiba","雷鳴牙"],["gokuen ryuu","獄炎竜"],
+    ["hyouketsu jin","氷結陣"],["shippuu jinrai","疾風迅雷"],["seinaru hikari","聖なる光"],
+    ["jaaku no monsho","邪悪の紋章"],
+  ],
+  [ // tier4 最難関
+    ["tenchi muyou","天地無用"],["kongoufu eshou","金剛不壊"],["bakuretsu kekkai","爆裂結界"],
+    ["zettai reido no jin","絶対零度の陣"],["raijin no ikari","雷神の怒り"],
+    ["shinra bansho","森羅万象"],["gokuen no shihaisha","獄炎の支配者"],
+    ["meikai no monban","冥界の門番"],["eikou naru kifu","栄光なる棋譜"],
+    ["owari naki tatakai","終わりなき戦い"],
+  ],
+];
+
+//============== ゲーム状態 ==============
+let G = null;
+let cur = null;
+
+const $ = id => document.getElementById(id);
+
+//---- タイトル：キャラ表示 ----
+function buildCharList(){
+  const list = $("charList");
+  list.innerHTML = "";
+  CHARACTERS.forEach(c => {
+    const maxH=200, maxA=1.6, maxD=1.6;
+    const card = document.createElement("div");
+    card.className = "char-card";
+    card.innerHTML = `
+      <div class="char-emoji">${c.emoji}</div>
+      <div class="char-name">${c.name}</div>
+      <div class="char-desc">${c.desc}</div>
+      <div class="stat-row">たいりょく<span class="bar-mini"><div style="width:${c.hp/maxH*100}%;background:var(--hp)"></div></span></div>
+      <div class="stat-row">こうげき<span class="bar-mini"><div style="width:${c.atk/maxA*100}%;background:var(--warn)"></div></span></div>
+      <div class="stat-row">まもり<span class="bar-mini"><div style="width:${c.def/maxD*100}%;background:var(--mp)"></div></span></div>
+      <div style="margin-top:10px;font-size:12px;color:#ff5c8a;font-weight:bold;">ひっさつわざ：<br>${c.ult}</div>
+    `;
+    card.onclick = () => startGame(c);
+    list.appendChild(card);
+  });
+}
+
+//---- ゲーム開始 ----
+function startGame(charDef){
+  G = {
+    char: charDef,
+    stageIndex: 0,
+    maxHp: charDef.hp,
+  };
+  $("title").classList.add("hidden");
+  $("battle").classList.remove("hidden");
+  $("player").textContent = charDef.emoji;
+  $("pName").textContent = charDef.name;
+  startStage();
+}
+
+//---- ステージ開始 ----
+function startStage(){
+  const st = STAGES[G.stageIndex];
+  cur = {
+    pHp: G.maxHp, pMp: 0,
+    eHp: st.hp, eMaxHp: st.hp,
+    stage: st,
+    damagePerHit: Math.max(3, Math.round(st.hp / 25)),
+    typed: "", target: "", targetMeaning: "",
+    wordsCleared: 0, combo: 0,
+    ultActive: false, ultUntil: 0,
+    over: false,
+  };
+  $("eName").textContent = st.name;
+  $("enemy").textContent = st.emoji;
+  $("stageInd").textContent = `STAGE ${G.stageIndex+1} / 5`;
+  nextWord();
+  updateBars();
+  scheduleEnemyAttack();
+  loopUlt();
+}
+
+//---- 次の単語 ----
+function nextWord(){
+  const pool = WORDS[cur.stage.tier];
+  const w = pool[Math.floor(Math.random()*pool.length)];
+  cur.target = w[0];
+  cur.targetMeaning = w[1];
+  cur.typed = "";
+  renderWord();
+  $("meaning").textContent = "「" + cur.targetMeaning + "」";
+}
+
+function renderWord(){
+  const t = cur.target, n = cur.typed.length;
+  let html = "";
+  for(let i=0;i<t.length;i++){
+    let cls = i<n ? "done" : (i===n ? "cur" : "todo");
+    let ch = t[i]===" " ? "␣" : t[i];
+    html += `<span class="${cls}">${ch}</span>`;
+  }
+  $("romaji").innerHTML = html;
+}
+
+//---- バー更新 ----
+function updateBars(){
+  const ph = Math.max(0, cur.pHp), eh = Math.max(0, cur.eHp);
+  $("pHp").style.width = (ph/G.maxHp*100)+"%";
+  $("pHpL").textContent = `HP ${Math.ceil(ph)} / ${G.maxHp}`;
+  $("eHp").style.width = (eh/cur.eMaxHp*100)+"%";
+  $("eHpL").textContent = `HP ${Math.ceil(eh)} / ${cur.eMaxHp}`;
+  $("pMp").style.width = cur.pMp+"%";
+  $("pMpL").textContent = cur.pMp>=100 ? "✨ひっさつわざOK! (Enter)✨" : `MP ${cur.pMp} / 100`;
+  $("mpBar").classList.toggle("ult-ready", cur.pMp>=100 && !cur.ultActive);
+}
+
+//============== タイピング入力 ==============
+document.addEventListener("keydown", (e)=>{
+  if(!cur || cur.over) return;
+  if($("battle").classList.contains("hidden")) return;
+
+  // ひっさつわざ発動は Enter のみ（Space は単語内のスペース入力に使うので使わない）
+  if(e.key === "Enter"){
+    e.preventDefault();
+    if(cur.pMp >= 100 && !cur.ultActive) tryUltimate();
+    return;
+  }
+
+  // Space はページのスクロールを止めて、単語入力として扱う
+  if(e.key === " ") e.preventDefault();
+
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+
+  let k = e.key;
+  if(k === "Backspace"){
+    cur.typed = cur.typed.slice(0,-1);
+    renderWord();
+    e.preventDefault();
+    return;
+  }
+  if(k.length !== 1) return;
+  k = k.toLowerCase();
+  const expected = cur.target[cur.typed.length];
+  if(k === expected){
+    cur.typed += k;
+    renderWord();
+    if(cur.typed.length === cur.target.length){
+      wordComplete();
+    }
+  } else {
+    cur.combo = 0;
+    $("combo").textContent = "";
+    $("typePanel").classList.remove("shake");
+    void $("typePanel").offsetWidth;
+    $("typePanel").classList.add("shake");
+  }
+});
+
+//---- 単語完成＝魔法で仲良し攻撃 ----
+function wordComplete(){
+  cur.wordsCleared++;
+  cur.combo++;
+  cur.pMp = Math.min(100, cur.pMp + 15); // 少しMPが溜まりやすく調整
+
+  let mult = G.char.atk * (cur.ultActive ? 2.5 : 1);
+  let comboBonus = 1 + Math.min(cur.combo, 10) * 0.04;
+  let dmg = Math.round(cur.damagePerHit * mult * comboBonus);
+  cur.eHp -= dmg;
+
+  showDamage($("enemy"), dmg, cur.ultActive ? "#ff4070" : "#ff8da1");
+  hitEffect($("enemy"));
+  beep(cur.ultActive ? 988 : 784, 0.06); // 少し高めの可愛い音に変更
+
+  $("combo").textContent = cur.combo>=2 ? `✨ ${cur.combo} コンボ！ ✨` : "";
+  updateBars();
+
+  if(cur.eHp <= 0){
+    enemyDefeated();
+  } else {
+    nextWord();
+  }
+}
+
+//============== ひっさつわざ ==============
+function tryUltimate(){
+  cur.pMp = 0;
+  cur.ultActive = true;
+  cur.ultUntil = performance.now() + 8000;
+  const b = $("ultBanner");
+  b.textContent = "💖 " + G.char.ult + " 💖";
+  b.classList.remove("show"); void b.offsetWidth; b.classList.add("show");
+  $("player").classList.add("flash");
+  setTimeout(()=>$("player").classList.remove("flash"), 250);
+  beep(880, 0.1); setTimeout(()=>beep(1320,0.1),100);
+  updateBars();
+}
+
+function loopUlt(){
+  if(!cur || cur.over) return;
+  if(cur.ultActive && performance.now() > cur.ultUntil){
+    cur.ultActive = false;
+    updateBars();
+  }
+  requestAnimationFrame(loopUlt);
+}
+
+//============== 敵のハグ（攻撃） ==============
+let enemyTimer = null;
+function scheduleEnemyAttack(){
+  clearTimeout(enemyTimer);
+  enemyTimer = setTimeout(()=>{
+    if(!cur || cur.over) return;
+    enemyAttack();
+    scheduleEnemyAttack();
+  }, cur.stage.interval);
+}
+
+function enemyAttack(){
+  let dmg = Math.round(cur.stage.atk / G.char.def);
+  cur.pHp -= dmg;
+  showDamage($("player"), dmg, "#9ccaff");
+  hitEffect($("player"));
+  beep(330, 0.08);
+  updateBars();
+  if(cur.pHp <= 0){
+    gameOver();
+  }
+}
+
+//============== 演出 ==============
+function hitEffect(el){
+  el.classList.remove("shake");
+  void el.offsetWidth;
+  el.classList.add("shake");
+  el.classList.add("flash");
+  setTimeout(()=>el.classList.remove("flash"), 250);
+}
+function showDamage(el, dmg, color){
+  const r = el.getBoundingClientRect();
+  const arena = $("battle").getBoundingClientRect();
+  const pop = document.createElement("div");
+  pop.className = "dmg-pop";
+  pop.textContent = "★" + dmg; // マイナスではなく星マークにしてマイルドに
+  pop.style.color = color;
+  pop.style.left = (r.left - arena.left + r.width/2 - 20 + (Math.random()*30-15)) + "px";
+  pop.style.top  = (r.top - arena.top + 10) + "px";
+  $("battle").appendChild(pop);
+  setTimeout(()=>pop.remove(), 800);
+}
+
+let actx = null;
+function beep(freq, dur){
+  try{
+    if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = freq; o.type = "sine"; // 角のある音(square)から、丸みのある音(sine)に変更
+    g.gain.value = 0.03;
+    o.connect(g); g.connect(actx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    o.stop(actx.currentTime + dur);
+  }catch(e){}
+}
+
+//============== 勝敗・進行 ==============
+function enemyDefeated(){
+  cur.over = true;
+  clearTimeout(enemyTimer);
+  if(G.stageIndex >= STAGES.length - 1){
+    showOverlay("🎉 プレミアムハッピー・ゲームクリア 🎉",
+      `ぜんぶのステージをクリアしたよ！<br>あなたは最高の <span class="ult-name-tag">言霊のプリンセス＆プリンス</span> です！`,
+      `もういちどあそぶ`, resetToTitle);
+  } else {
+    showOverlay(`✨ STAGE ${G.stageIndex+1} クリア! ✨`,
+      `<b>${cur.stage.name}</b> とおともだちになったよ！<br>たいりょくが全かいふくして、つぎのステージへすすみます。`,
+      "つぎのステージへ", ()=>{
+        G.stageIndex++;
+        startStage();
+        removeOverlay();
+      });
+  }
+}
+
+function gameOver(){
+  cur.over = true;
+  clearTimeout(enemyTimer);
+  showOverlay("🎀 ひとやすみしよう 🎀",
+    `すこしつかれちゃったみたい…（STAGE ${G.stageIndex+1}）<br>もういちどチャレンジしてみよう！`,
+    "タイトルへもどる", resetToTitle);
+}
+
+//============== オーバーレイ ==============
+function showOverlay(title, body, btnText, onClick){
+  removeOverlay();
+  const ov = document.createElement("div");
+  ov.className = "overlay"; ov.id = "overlay";
+  ov.innerHTML = `<h2>${title}</h2><p>${body}</p>`;
+  const btn = document.createElement("button");
+  btn.className = "go"; btn.textContent = btnText;
+  btn.onclick = onClick;
+  ov.appendChild(btn);
+  document.body.appendChild(ov);
+  beep(523,0.1); setTimeout(()=>beep(659,0.15),120);
+}
+function removeOverlay(){ const o=$("overlay"); if(o) o.remove(); }
+
+function resetToTitle(){
+  removeOverlay();
+  cur = null; G = null;
+  $("battle").classList.add("hidden");
+  $("title").classList.remove("hidden");
+}
+
+//============== 初期化 ==============
+buildCharList();
+</script>
+</body>
+</html>
